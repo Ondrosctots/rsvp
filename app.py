@@ -1,20 +1,25 @@
 import streamlit as st
 import requests
 
+# ---------------- CONFIG ----------------
 API_BASE = "https://api.reverb.com/api"
 
-st.set_page_config(page_title="Reverb Messages Tool", layout="wide")
+st.set_page_config(
+    page_title="Reverb Messages Tool",
+    layout="wide"
+)
+
 st.title("📬 Reverb Messages Inbox")
 
-# --- Ask for token EVERY time ---
+# ---------------- TOKEN INPUT ----------------
 api_token = st.text_input(
     "Enter your Reverb API Token",
     type="password",
-    help="Token is not saved. Required each session."
+    help="Token is required every session and is never saved."
 )
 
 if not api_token:
-    st.info("Please enter your API token to continue.")
+    st.info("Please enter your Reverb API token to load your messages.")
     st.stop()
 
 headers = {
@@ -24,70 +29,121 @@ headers = {
     "Accept-Version": "3.0"
 }
 
-# --- API functions ---
+# ---------------- API FUNCTIONS ----------------
 def get_conversations():
     url = f"{API_BASE}/my/conversations"
     r = requests.get(url, headers=headers)
+
     if r.status_code != 200:
-        st.error("Failed to load conversations. Check token.")
+        st.error("Failed to load conversations. Invalid token or API error.")
         return []
+
     return r.json().get("conversations", [])
+
+def extract_conversation_id(c):
+    """
+    Safely extract conversation ID from multiple possible formats
+    """
+    return (
+        c.get("id")
+        or c.get("conversation_id")
+        or c.get("_links", {})
+             .get("self", {})
+             .get("href", "")
+             .split("/")[-1]
+    )
 
 def get_conversation(conv_id):
     url = f"{API_BASE}/my/conversations/{conv_id}"
     r = requests.get(url, headers=headers)
+
     if r.status_code != 200:
-        st.error("Failed to load conversation.")
+        st.error("Failed to load conversation messages.")
         return {}
+
     return r.json()
 
 def send_reply(conv_id, message):
     url = f"{API_BASE}/my/conversations/{conv_id}/messages"
     payload = {"body": message}
+
     r = requests.post(url, json=payload, headers=headers)
     return r.status_code in [200, 201]
 
-# --- Load conversations ---
+# ---------------- LOAD CONVERSATIONS ----------------
 if st.button("📥 Load My Conversations"):
     st.session_state["conversations"] = get_conversations()
 
 conversations = st.session_state.get("conversations", [])
 
+# ---------------- DISPLAY CONVERSATIONS ----------------
 if conversations:
-    st.subheader("Conversations")
+    st.subheader("Your Conversations")
 
-    conv_map = {
-        f"{c['id']} — {c.get('last_message_preview', '')}": c["id"]
-        for c in conversations
-    }
+    conv_map = {}
 
-    selected = st.selectbox(
+    for c in conversations:
+        conv_id = extract_conversation_id(c)
+        if not conv_id:
+            continue
+
+        preview = c.get("last_message_preview", "No preview")
+        label = f"{conv_id} — {preview}"
+
+        conv_map[label] = conv_id
+
+    if not conv_map:
+        st.warning("No valid conversations found.")
+        st.stop()
+
+    selected_label = st.selectbox(
         "Select a conversation",
         options=list(conv_map.keys())
     )
 
-    conv_id = conv_map[selected]
-    data = get_conversation(conv_id)
+    selected_conv_id = conv_map[selected_label]
+
+    # ---------------- LOAD MESSAGES ----------------
+    conversation = get_conversation(selected_conv_id)
 
     st.divider()
     st.subheader("Messages")
 
-    for msg in data.get("messages", []):
-        sender = msg.get("sender_name", "Unknown")
-        body = msg.get("body", "")
-        created = msg.get("created_at", "")
-        st.markdown(f"**{sender}**  \n{body}  \n🕒 {created}")
-        st.markdown("---")
+    messages = conversation.get("messages", [])
 
+    if not messages:
+        st.info("No messages in this conversation yet.")
+    else:
+        for msg in messages:
+            sender = msg.get("sender_name", "Unknown")
+            body = msg.get("body", "")
+            created = msg.get("created_at", "")
+
+            st.markdown(
+                f"""
+                **{sender}**  
+                {body}  
+                🕒 {created}
+                """
+            )
+            st.markdown("---")
+
+    # ---------------- REPLY ----------------
     st.subheader("✉️ Reply")
-    reply_text = st.text_area("Your message")
+    reply_text = st.text_area(
+        "Type your reply here",
+        height=120
+    )
 
     if st.button("Send Reply"):
-        if reply_text.strip():
-            success = send_reply(conv_id, reply_text)
-            if success:
-                st.success("Message sent successfully.")
-            else:
-                st.error("Failed to send message.")
+        if not reply_text.strip():
+            st.warning("Reply message cannot be empty.")
         else:
-            st.warning("Message cannot be empty.")
+            success = send_reply(selected_conv_id, reply_text)
+            if success:
+                st.success("Reply sent successfully.")
+            else:
+                st.error("Failed to send reply.")
+
+else:
+    st.info("Click **Load My Conversations** to fetch your messages.")
