@@ -5,21 +5,21 @@ import requests
 API_BASE = "https://api.reverb.com/api"
 
 st.set_page_config(
-    page_title="Reverb Messages Tool",
+    page_title="tst",
     layout="wide"
 )
 
-st.title("📬 Reverb Messages Inbox")
+st.title("📬")
 
 # ---------------- TOKEN INPUT ----------------
 api_token = st.text_input(
-    "Enter your Reverb API Token",
+    "code",
     type="password",
     help="Token is required every session and is never saved."
 )
 
 if not api_token:
-    st.info("Please enter your Reverb API token to load your messages.")
+    st.info("tst.")
     st.stop()
 
 headers = {
@@ -35,7 +35,7 @@ def get_conversations():
     r = requests.get(url, headers=headers)
 
     if r.status_code != 200:
-        st.error("Failed to load conversations. Invalid token or API error.")
+        st.error("Failed. Invalid error.")
         return []
 
     return r.json().get("conversations", [])
