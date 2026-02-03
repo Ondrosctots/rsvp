@@ -71,7 +71,7 @@ def send_reply(conv_id, message):
     return r.status_code in [200, 201]
 
 # ---------------- LOAD CONVERSATIONS ----------------
-if st.button("📥 Load My Conversations"):
+if st.button("📥"):
     st.session_state["conversations"] = get_conversations()
 
 conversations = st.session_state.get("conversations", [])
