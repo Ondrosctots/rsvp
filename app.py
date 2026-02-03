@@ -58,7 +58,7 @@ def get_conversation(conv_id):
     r = requests.get(url, headers=headers)
 
     if r.status_code != 200:
-        st.error("Failed to load conversation messages.")
+        st.error("Failed.")
         return {}
 
     return r.json()
